@@ -1486,7 +1486,7 @@ function renderNews() {
   };
 
   let html = '';
-  let cardIdx = 0;
+  _cardUid = 0;
   for (const [status, news] of Object.entries(groups)) {
     if (news.length === 0) continue;
     html += `
@@ -1495,15 +1495,16 @@ function renderNews() {
         <span class="section-count">${news.length} noticias</span>
       </div>
       <div class="news-list">
-        ${news.map(n => renderNewsCard(n, cardIdx++, icons[status])).join('')}
+        ${news.map(n => renderNewsCard(n, 0, icons[status])).join('')}
       </div>`;
   }
 
   container.innerHTML = html;
 }
 
+let _cardUid = 0;
 function renderNewsCard(news, idx, icon) {
-  const id = `news-${idx}-${Date.now()}`;
+  const id = `news-${_cardUid++}`;
   const statusClass = news.status === 'Fato Confirmado' ? 'status-fato' :
                       news.status === 'Proposta/Discussao' ? 'status-proposta' : 'status-expectativa';
   const statusTagClass = news.status === 'Fato Confirmado' ? 'news-tag-status' :
@@ -1527,7 +1528,7 @@ function renderNewsCard(news, idx, icon) {
       <div class="news-header" onclick="toggleNews('${id}')">
         <div class="news-status-badge ${statusClass}">${icon}</div>
         <div class="news-info">
-          <div class="news-title"><a href="${news.link}" target="_blank" rel="noopener">${escapeHtml(news.title)}</a></div>
+          <div class="news-title"><a href="${news.link}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(news.title)}</a></div>
           <div class="news-meta">
             <span class="news-source">${escapeHtml(news.source)}</span>
             <span class="credibility-badge ${credClass}">${news.credIcon} ${news.credibilidade}</span>
@@ -1587,7 +1588,7 @@ function renderNewsCard(news, idx, icon) {
 
 function toggleNews(id) {
   const card = document.getElementById(id);
-  card.classList.toggle('expanded');
+  if (card) card.classList.toggle('expanded');
 }
 
 function escapeHtml(text) {
