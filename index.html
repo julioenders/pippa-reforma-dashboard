@@ -1486,6 +1486,7 @@ function renderNews() {
   };
 
   let html = '';
+  let cardIdx = 0;
   for (const [status, news] of Object.entries(groups)) {
     if (news.length === 0) continue;
     html += `
@@ -1494,7 +1495,7 @@ function renderNews() {
         <span class="section-count">${news.length} noticias</span>
       </div>
       <div class="news-list">
-        ${news.map((n, i) => renderNewsCard(n, i, icons[status])).join('')}
+        ${news.map(n => renderNewsCard(n, cardIdx++, icons[status])).join('')}
       </div>`;
   }
 
