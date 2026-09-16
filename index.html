@@ -26,6 +26,9 @@
       --cbs: #a855f7;
       --seletivo: #f472b6;
       --success: #22c55e;
+      --cred-ok: #22c55e;
+      --cred-atencao: #f59e0b;
+      --cred-risco: #ef4444;
       --radius: 10px;
       --shadow: 0 2px 12px rgba(0,0,0,0.3);
     }
@@ -635,6 +638,39 @@
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
+    .credibility-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .cred-confiavel { background: rgba(34,197,94,0.15); color: var(--cred-ok); }
+    .cred-atencao { background: rgba(245,158,11,0.2); color: var(--cred-atencao); }
+    .cred-risco { background: rgba(239,68,68,0.2); color: var(--cred-risco); }
+
+    .news-card.risco-fake {
+      border-left: 3px solid var(--cred-risco);
+    }
+
+    .news-card.atencao-fake {
+      border-left: 3px solid var(--cred-atencao);
+    }
+
+    .kpi-risco { color: var(--cred-risco); }
+
+    .cred-tooltip {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-style: italic;
+      margin-top: 4px;
+    }
+
     .sidebar-footer {
       margin-top: 16px;
       padding-top: 12px;
@@ -721,6 +757,21 @@
         </div>
       </div>
 
+      <div class="filter-section" data-section="credibilidade">
+        <div class="filter-header" onclick="toggleSection(this)">
+          <div class="filter-title">Credibilidade <span class="filter-badge" id="badge-credibilidade"></span></div>
+          <span class="filter-arrow">&#9660;</span>
+        </div>
+        <div class="filter-body">
+          <div class="filter-group" id="filterCredibilidade">
+            <span class="filter-chip" data-filter="credibilidade" data-value="Confiavel" onclick="toggleFilter(this)">Confiavel</span>
+            <span class="filter-chip" data-filter="credibilidade" data-value="Atencao" onclick="toggleFilter(this)">Atencao</span>
+            <span class="filter-chip" data-filter="credibilidade" data-value="Risco" onclick="toggleFilter(this)">Risco Fake News</span>
+          </div>
+          <span class="filter-clear" onclick="clearFilter('credibilidade')">Limpar</span>
+        </div>
+      </div>
+
       <div class="filter-section" data-section="fonte">
         <div class="filter-header" onclick="toggleSection(this)">
           <div class="filter-title">Fonte <span class="filter-badge" id="badge-fonte"></span></div>
@@ -785,6 +836,10 @@
           <div class="kpi-value kpi-impacto" id="kpiAltoImpacto">—</div>
           <div class="kpi-label">Alto Impacto MPE</div>
         </div>
+        <div class="kpi-card-sm">
+          <div class="kpi-value kpi-risco" id="kpiRiscoFake">—</div>
+          <div class="kpi-label">Risco Fake News</div>
+        </div>
       </div>
 
       <div class="charts-row">
@@ -836,6 +891,137 @@
 // =====================================================
 // PIPPA REFORMA TRIBUTARIA — MONITOR ENGINE
 // =====================================================
+
+// =====================================================
+// CREDIBILITY ENGINE — Fontes confiaveis e deteccao de risco
+// =====================================================
+
+const FONTES_JORNALISTICAS = [
+  'agencia brasil', 'ebc', 'valor economico', 'valor globo', 'valor investe',
+  'folha de s.paulo', 'folha de sao paulo', 'folha', 'uol',
+  'estadao', 'estado de s. paulo', 'estado de sao paulo',
+  'o globo', 'globo', 'g1', 'cnn brasil', 'cnn',
+  'bbc news brasil', 'bbc brasil', 'bbc',
+  'reuters', 'bloomberg', 'poder360', 'poder 360',
+  'exame', 'istoe dinheiro', 'istoe', 'istoé',
+  'jota', 'jota info', 'conjur', 'consultor juridico',
+  'infomoney', 'money times', 'investing.com',
+  'carta capital', 'correio braziliense', 'gazeta do povo',
+  'diario do comercio', 'jornal do commercio', 'jornal do comercio',
+  'terra', 'r7', 'band', 'bandnews', 'sbt news',
+  'record news', 'metropoles', 'nexo jornal', 'nexo',
+  'the economist', 'financial times', 'wall street journal',
+  'associated press', 'ap news', 'france presse', 'afp', 'efe',
+  'el pais brasil', 'deutsche welle', 'dw'
+];
+
+const FONTES_INSTITUCIONAIS = [
+  'sebrae', 'cna', 'cni', 'cnc', 'cnm', 'cnt',
+  'senai', 'sesi', 'senac', 'sesc', 'senar', 'sest', 'senat',
+  'apex', 'apexbrasil', 'apex-brasil', 'fibra',
+  'banco do brasil', 'caixa', 'caixa economica',
+  'santander', 'bradesco', 'itau', 'itau unibanco',
+  'btg pactual', 'btg', 'banco safra', 'safra',
+  'bndes', 'banco bmg', 'bmg', 'sicredi', 'sicoob',
+  'brb', 'banco de brasilia', 'banrisul', 'banestes',
+  'banpara', 'bnb', 'banco do nordeste', 'basa', 'banco da amazonia',
+  'febraban', 'banco central', 'bcb',
+  'receita federal', 'ministerio da fazenda', 'fazenda',
+  'camara dos deputados', 'camara', 'senado federal', 'senado',
+  'governo federal', 'gov.br', 'planalto',
+  'tcu', 'cgu', 'ibge', 'ipea',
+  'usp', 'unicamp', 'ufrj', 'ufmg', 'unb', 'ufrgs',
+  'fgv', 'fundacao getulio vargas', 'insper', 'ibre',
+  'dieese', 'fiesp', 'firjan', 'fiergs',
+  'oab', 'anpec', 'ipece', 'observatorio'
+];
+
+const FAKE_NEWS_PATTERNS = [
+  /urgente.*!!+/i,
+  /bomba.*!!+/i,
+  /voce nao vai acreditar/i,
+  /compartilhe antes que/i,
+  /a midia nao quer que voce saiba/i,
+  /revelado.*segredo/i,
+  /chocante/i,
+  /absurdo.*governo/i,
+  /fim do.*brasil/i,
+  /golpe.*tributario/i,
+  /destrui.*economia/i,
+  /esquema.*bilhoes/i
+];
+
+const CLICKBAIT_SIGNALS = [
+  'descubra', 'saiba o que', 'veja o que aconteceu',
+  'ninguem esperava', 'a verdade sobre', 'o que nao te contam',
+  'isso muda tudo', 'nunca mais', 'inacreditavel'
+];
+
+function classifyCredibility(source, title) {
+  const normSource = normalize(source);
+  const normTitle = normalize(title);
+
+  const isTrustedJournalistic = FONTES_JORNALISTICAS.some(f => normSource.includes(f));
+  const isTrustedInstitutional = FONTES_INSTITUCIONAIS.some(f => normSource.includes(f));
+
+  if (isTrustedJournalistic || isTrustedInstitutional) {
+    return {
+      credibilidade: 'Confiavel',
+      credScore: 100,
+      credMotivo: isTrustedJournalistic ? 'Veiculo jornalistico consolidado' : 'Fonte institucional valida',
+      credIcon: '&#9989;'
+    };
+  }
+
+  let riscoScore = 0;
+  let motivos = [];
+
+  if (normSource === 'desconhecida' || normSource.length < 3) {
+    riscoScore += 40;
+    motivos.push('Fonte nao identificada');
+  }
+
+  if (FAKE_NEWS_PATTERNS.some(p => p.test(normTitle))) {
+    riscoScore += 50;
+    motivos.push('Padrao de desinformacao no titulo');
+  }
+
+  const clickbaitCount = CLICKBAIT_SIGNALS.filter(s => normTitle.includes(s)).length;
+  if (clickbaitCount >= 2) {
+    riscoScore += 30;
+    motivos.push('Multiplos sinais de clickbait');
+  } else if (clickbaitCount === 1) {
+    riscoScore += 10;
+  }
+
+  const upperRatio = (title.replace(/[^A-ZÀ-Ú]/g, '').length) / Math.max(title.replace(/\s/g, '').length, 1);
+  if (upperRatio > 0.5 && title.length > 20) {
+    riscoScore += 20;
+    motivos.push('Uso excessivo de caixa alta');
+  }
+
+  const exclamations = (title.match(/!/g) || []).length;
+  if (exclamations >= 3) {
+    riscoScore += 20;
+    motivos.push('Pontuacao excessiva');
+  }
+
+  if (riscoScore >= 40) {
+    return {
+      credibilidade: 'Risco',
+      credScore: Math.max(0, 100 - riscoScore),
+      credMotivo: motivos.join('; ') || 'Fonte nao reconhecida nas listas de veiculos confiaveis',
+      credIcon: '&#9888;'
+    };
+  }
+
+  return {
+    credibilidade: 'Atencao',
+    credScore: Math.max(30, 100 - riscoScore),
+    credMotivo: 'Fonte nao listada entre veiculos confiaveis — verificar origem',
+    credIcon: '&#10071;'
+  };
+}
 
 const SEARCH_QUERIES = [
   '%22reforma+tribut%C3%A1ria%22',
@@ -903,7 +1089,7 @@ const IMPACTO_MPE_KEYWORDS = {
 
 let allNews = [];
 let filteredNews = [];
-let activeFilters = { status: [], tema: [], impactoMPE: [], fonte: [] };
+let activeFilters = { status: [], tema: [], impactoMPE: [], credibilidade: [], fonte: [] };
 let chartStatus, chartTema, chartFonte;
 
 document.getElementById('dateInput').valueAsDate = new Date();
@@ -958,7 +1144,7 @@ function classifyNews(title) {
     impactoMPE = 'Baixo';
   }
 
-  return { status, tema, temas, impactoMPE };
+  return { status, tema, temas, impactoMPE, credibilidade: null, credScore: null, credMotivo: null, credIcon: null };
 }
 
 function showLoading(text, progress) {
@@ -1046,9 +1232,11 @@ async function fetchData() {
 
     allNews = allResults.map(item => {
       const classification = classifyNews(item.title);
+      const cred = classifyCredibility(item.source, item.title);
       return {
         ...item,
         ...classification,
+        ...cred,
         date: date
       };
     });
@@ -1094,6 +1282,7 @@ function updateKPIs() {
   document.getElementById('kpiSeletivo').textContent = countTema('Imposto Seletivo');
   document.getElementById('kpiSimplesMEI').textContent = countTema('Simples/MEI');
   document.getElementById('kpiAltoImpacto').textContent = allNews.filter(n => n.impactoMPE === 'Alto').length;
+  document.getElementById('kpiRiscoFake').textContent = allNews.filter(n => n.credibilidade === 'Risco').length;
 }
 
 function updateThermometer() {
@@ -1135,7 +1324,7 @@ function toggleSection(header) {
 }
 
 function updateFilterBadges() {
-  const filters = ['status', 'tema', 'impactoMPE', 'fonte'];
+  const filters = ['status', 'tema', 'impactoMPE', 'credibilidade', 'fonte'];
   filters.forEach(f => {
     const badge = document.getElementById('badge-' + f);
     if (!badge) return;
@@ -1178,6 +1367,7 @@ function applyFilters() {
     if (activeFilters.status.length && !activeFilters.status.includes(n.status)) return false;
     if (activeFilters.tema.length && !activeFilters.tema.includes(n.tema)) return false;
     if (activeFilters.impactoMPE.length && !activeFilters.impactoMPE.includes(n.impactoMPE)) return false;
+    if (activeFilters.credibilidade.length && !activeFilters.credibilidade.includes(n.credibilidade)) return false;
     if (activeFilters.fonte.length && !activeFilters.fonte.includes(n.source)) return false;
     return true;
   });
@@ -1257,14 +1447,20 @@ function renderNewsCard(news, idx, icon) {
     `<span class="news-tag news-tag-tema">${t}</span>`
   ).join('');
 
+  const credClass = news.credibilidade === 'Risco' ? 'cred-risco' :
+                     news.credibilidade === 'Atencao' ? 'cred-atencao' : 'cred-confiavel';
+  const cardRiskClass = news.credibilidade === 'Risco' ? ' risco-fake' :
+                        news.credibilidade === 'Atencao' ? ' atencao-fake' : '';
+
   return `
-    <div class="news-card" id="${id}">
+    <div class="news-card${cardRiskClass}" id="${id}">
       <div class="news-header" onclick="toggleNews('${id}')">
         <div class="news-status-badge ${statusClass}">${icon}</div>
         <div class="news-info">
           <div class="news-title"><a href="${news.link}" target="_blank" rel="noopener">${escapeHtml(news.title)}</a></div>
           <div class="news-meta">
             <span class="news-source">${escapeHtml(news.source)}</span>
+            <span class="credibility-badge ${credClass}">${news.credIcon} ${news.credibilidade}</span>
             ${pubDate}
           </div>
           <div class="news-tags">
@@ -1292,6 +1488,14 @@ function renderNewsCard(news, idx, icon) {
           <div class="detail-item">
             <span class="detail-label">Fonte</span>
             <span class="detail-value">${escapeHtml(news.source)}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Credibilidade</span>
+            <span class="detail-value"><span class="credibility-badge ${credClass}">${news.credIcon} ${news.credibilidade}</span> (${news.credScore}/100)</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Motivo da classificacao</span>
+            <span class="detail-value">${news.credMotivo}</span>
           </div>
           <div class="detail-item">
             <span class="detail-label">Publicacao</span>
@@ -1460,6 +1664,22 @@ function exportWhatsApp() {
 
   if (altoImpacto.length > 0) {
     text += `*Impacto para pequenos negocios:* ${altoImpacto.length} noticias com alto impacto potencial para MEI/Simples/MPE\n\n`;
+  }
+
+  const riscoFake = allNews.filter(n => n.credibilidade === 'Risco');
+  const atencaoFake = allNews.filter(n => n.credibilidade === 'Atencao');
+  if (riscoFake.length > 0 || atencaoFake.length > 0) {
+    text += `*Alerta de credibilidade:*\n`;
+    if (riscoFake.length > 0) {
+      text += `⚠️ ${riscoFake.length} noticia(s) com _risco de fake news_ — fontes nao reconhecidas\n`;
+      for (const n of riscoFake) {
+        text += `  • ${n.title} — _${n.source}_ (${n.credMotivo})\n`;
+      }
+    }
+    if (atencaoFake.length > 0) {
+      text += `❗ ${atencaoFake.length} noticia(s) de fontes nao listadas — verificar origem\n`;
+    }
+    text += `\n`;
   }
 
   const el = document.getElementById('thermometer');
