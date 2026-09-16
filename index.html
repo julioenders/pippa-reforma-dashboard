@@ -671,6 +671,53 @@
       margin-top: 4px;
     }
 
+    .credibility-note {
+      margin-top: 16px;
+      padding: 12px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.03);
+      font-size: 11px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+    .credibility-note-title {
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+      font-size: 11.5px;
+      text-align: center;
+    }
+    .credibility-note .cred-level {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .credibility-note .cred-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 4px;
+    }
+    .credibility-note .cred-dot.green { background: #10b981; }
+    .credibility-note .cred-dot.yellow { background: #f59e0b; }
+    .credibility-note .cred-dot.red { background: #ef4444; }
+    .credibility-note .cred-label {
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .credibility-note .cred-criteria {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+      font-size: 10.5px;
+      color: var(--text-muted);
+    }
+    .credibility-note .cred-criteria strong {
+      color: var(--text-secondary);
+    }
     .sidebar-footer {
       margin-top: 16px;
       padding-top: 12px;
@@ -780,6 +827,28 @@
         <div class="filter-body">
           <div class="filter-group" id="filterFonte"></div>
           <span class="filter-clear" onclick="clearFilter('fonte')">Limpar</span>
+        </div>
+      </div>
+
+      <div class="credibility-note">
+        <div class="credibility-note-title">Sistema de Credibilidade</div>
+
+        <div class="cred-level">
+          <span class="cred-dot green"></span>
+          <div><span class="cred-label">Confiavel</span> — Fonte reconhecida em lista curada de 70+ veiculos jornalisticos e 60+ fontes institucionais (Sistema S, bancos, BCB, universidades, orgaos publicos).</div>
+        </div>
+        <div class="cred-level">
+          <span class="cred-dot yellow"></span>
+          <div><span class="cred-label">Atencao</span> — Fonte nao identificada nas listas oficiais, porem sem sinais de desinformacao detectados no conteudo.</div>
+        </div>
+        <div class="cred-level">
+          <span class="cred-dot red"></span>
+          <div><span class="cred-label">Risco</span> — Fonte desconhecida com sinais de desinformacao. Score de risco acumulativo: fonte nao identificada (+40), padroes de fake news no titulo (+50), clickbait multiplo (+30), caixa alta excessiva (+20), pontuacao excessiva (+20). Risco = score ≥ 40.</div>
+        </div>
+
+        <div class="cred-criteria">
+          <strong>Fontes jornalisticas:</strong> Valor, Folha, Estadao, G1, CNN Brasil, Reuters, Bloomberg, Poder360, JOTA, Conjur, Exame, InfoMoney, entre outras.<br>
+          <strong>Fontes institucionais:</strong> Sebrae, CNA, CNI, CNC, CNM, SENAI, SESI, SENAC, SESC, SENAR, CNT, SEST, SENAT, ApexBrasil, FIBRA, Febraban, BCB, BNDES, BB, Caixa, Itau, Bradesco, Santander, BTG, Receita Federal, MF, universidades, entre outras.
         </div>
       </div>
 
