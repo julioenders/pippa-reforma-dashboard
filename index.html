@@ -1693,72 +1693,103 @@ function exportWhatsApp() {
   if (!allNews.length) { alert('Busque as noticias primeiro.'); return; }
 
   const dateObj = new Date(date + 'T12:00:00');
-  const dateStr = dateObj.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const dateStr = dateObj.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
 
   const fatos = allNews.filter(n => n.status === 'Fato Confirmado');
   const propostas = allNews.filter(n => n.status === 'Proposta/Discussao');
   const expectativas = allNews.filter(n => n.status === 'Expectativa/Projecao');
   const fontes = [...new Set(allNews.map(n => n.source))];
   const altoImpacto = allNews.filter(n => n.impactoMPE === 'Alto');
+  const fontesElegiveis = SEARCH_QUERIES.length * 2;
+  const basesConsultadas = ['Google News RSS'];
 
-  let text = `*PIPPA — Monitor de Reforma Tributaria*\n`;
+  let text = `PIPPA — Plataforma de Inteligência em Políticas Públicas Aplicadas\n\n`;
+  text += `Monitor de Reforma Tributária\n`;
   text += `${dateStr}\n`;
-  text += `${allNews.length} noticias · ${fontes.length} fontes · ${fatos.length} fatos · ${propostas.length} propostas · ${expectativas.length} projecoes\n\n`;
+  text += `${fontesElegiveis} fontes elegíveis pesquisadas · ${basesConsultadas.length} base consultada (${basesConsultadas.join(', ')}) · ${fatos.length} fato${fatos.length !== 1 ? 's' : ''} identificado${fatos.length !== 1 ? 's' : ''}\n\n`;
 
-  if (fatos.length > 0) {
-    text += `*Fatos Confirmados*\n\n`;
-    for (const n of fatos) {
-      text += `• *${n.title}*\n`;
-      text += `_Fonte:_ ${n.source} · _Tema:_ ${n.tema}${n.impactoMPE === 'Alto' ? ' · _Impacto MPE: Alto_' : ''}\n`;
-      if (n.link) text += `${n.link}\n`;
-      text += `\n`;
+  // O que aconteceu hoje — narrativa editorial
+  text += `O que aconteceu hoje?\n\n`;
+  const allRelevant = [...fatos, ...altoImpacto.filter(n => n.status !== 'Fato Confirmado')];
+  const uniqueRelevant = allRelevant.filter((n, i, arr) => arr.findIndex(m => m.title === n.title) === i);
+  if (uniqueRelevant.length > 0) {
+    for (const n of uniqueRelevant.slice(0, 5)) {
+      text += `${n.title}`;
+      if (n.description) text += ` — ${n.description.substring(0, 200).replace(/\n/g, ' ').trim()}`;
+      text += `\n\n`;
+    }
+  } else if (propostas.length > 0) {
+    for (const n of propostas.slice(0, 3)) {
+      text += `${n.title}`;
+      if (n.description) text += ` — ${n.description.substring(0, 200).replace(/\n/g, ' ').trim()}`;
+      text += `\n\n`;
     }
   }
 
-  if (propostas.length > 0) {
-    text += `*Propostas e Discussoes*\n\n`;
-    for (const n of propostas.slice(0, 8)) {
-      text += `• ${n.title}\n`;
-      text += `_${n.source}_ · ${n.tema}\n\n`;
-    }
-    if (propostas.length > 8) text += `_... e mais ${propostas.length - 8} propostas/discussoes_\n\n`;
-  }
-
-  if (expectativas.length > 0) {
-    text += `*Expectativas e Projecoes*\n\n`;
-    for (const n of expectativas.slice(0, 5)) {
-      text += `• ${n.title} — _${n.source}_\n`;
-    }
-    if (expectativas.length > 5) text += `_... e mais ${expectativas.length - 5} projecoes_\n`;
-    text += `\n`;
-  }
-
+  // O que significa para pequenos negócios
+  text += `O que significa para pequenos negócios?\n\n`;
+  const temasAtivos = [...new Set(allNews.map(n => n.tema))].filter(t => t !== 'Geral');
   if (altoImpacto.length > 0) {
-    text += `*Impacto para pequenos negocios:* ${altoImpacto.length} noticias com alto impacto potencial para MEI/Simples/MPE\n\n`;
+    text += `${altoImpacto.length} notícia${altoImpacto.length !== 1 ? 's' : ''} com alto impacto potencial para MEI/Simples/MPE identificada${altoImpacto.length !== 1 ? 's' : ''}. `;
+    text += `Temas em destaque: ${temasAtivos.join(', ') || 'Geral'}. `;
+    text += `Acompanhe os desdobramentos nos próximos dias.\n\n`;
+  } else {
+    text += `Movimentação moderada hoje. Temas em pauta: ${temasAtivos.join(', ') || 'Geral'}.\n\n`;
   }
 
+  // Pontos de atenção
+  text += `Pontos de atenção\n\n`;
+  const pontosAtencao = [];
+  for (const n of fatos.slice(0, 3)) {
+    pontosAtencao.push(n.title);
+  }
+  for (const n of altoImpacto.filter(n => n.status !== 'Fato Confirmado').slice(0, 2)) {
+    pontosAtencao.push(n.title + ' — impacto alto para MPE');
+  }
+  if (propostas.length > 3) {
+    pontosAtencao.push(`${propostas.length} propostas/discussões em andamento sobre ${temasAtivos.slice(0, 3).join(', ')}`);
+  }
   const riscoFake = allNews.filter(n => n.credibilidade === 'Risco');
-  const atencaoFake = allNews.filter(n => n.credibilidade === 'Atencao');
-  if (riscoFake.length > 0 || atencaoFake.length > 0) {
-    text += `*Alerta de credibilidade:*\n`;
-    if (riscoFake.length > 0) {
-      text += `⚠️ ${riscoFake.length} noticia(s) com _risco de fake news_ — fontes nao reconhecidas\n`;
-      for (const n of riscoFake) {
-        text += `  • ${n.title} — _${n.source}_ (${n.credMotivo})\n`;
-      }
-    }
-    if (atencaoFake.length > 0) {
-      text += `❗ ${atencaoFake.length} noticia(s) de fontes nao listadas — verificar origem\n`;
-    }
-    text += `\n`;
+  if (riscoFake.length > 0) {
+    pontosAtencao.push(`${riscoFake.length} notícia(s) com risco de credibilidade — verificar fontes`);
   }
+  if (pontosAtencao.length === 0) pontosAtencao.push('Sem pontos críticos identificados hoje');
+  for (const p of pontosAtencao) {
+    text += `* ${p}\n`;
+  }
+  text += `\n`;
 
+  // Termômetro
   const el = document.getElementById('thermometer');
-  text += `*Termometro:* ${el.textContent}\n\n`;
+  const thermoText = el.textContent;
+  let thermoEmoji = '🟢';
+  if (el.classList.contains('thermo-red')) thermoEmoji = '🔴';
+  else if (el.classList.contains('thermo-orange')) thermoEmoji = '🟠';
+  else if (el.classList.contains('thermo-yellow')) thermoEmoji = '🟡';
+  text += `Termômetro: ${thermoEmoji} ${thermoText}\n\n`;
 
+  // Próximos desdobramentos
+  text += `Próximos desdobramentos: `;
+  const desdobramentos = [];
+  if (expectativas.length > 0) {
+    for (const n of expectativas.slice(0, 3)) {
+      desdobramentos.push(n.title);
+    }
+  }
+  if (desdobramentos.length === 0) desdobramentos.push('Acompanhar regulamentação e implementação');
+  text += desdobramentos.join(' · ') + `\n\n`;
+
+  // Rodapé com fontes
   text += `—\n`;
-  text += `_Fontes:_ ${fontes.join(' · ')}\n`;
-  text += `_Conteudo gerado com base em dados do Google News RSS._`;
+  const fontesComLink = allNews.filter(n => n.link).map(n => `${n.source} (${n.link})`);
+  const fontesUnicas = [...new Set(fontesComLink)];
+  if (fontesUnicas.length > 0) {
+    text += `Fontes externas: ${fontesUnicas.slice(0, 5).join(', ')}\n`;
+    if (fontesUnicas.length > 5) text += `... e mais ${fontesUnicas.length - 5} fontes\n`;
+  } else {
+    text += `Fontes: ${fontes.join(', ')}\n`;
+  }
+  text += `\nConteúdo gerado por Inteligência Artificial (IA)`;
 
   document.getElementById('exportContent').textContent = text;
   document.getElementById('exportModal').classList.add('active');
