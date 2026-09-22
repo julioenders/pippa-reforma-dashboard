@@ -351,6 +351,10 @@
       grid-column: span 2;
     }
 
+    .chart-card-full {
+      grid-column: 1 / -1;
+    }
+
     .news-summary {
       font-size: 13px;
       color: var(--text-muted);
@@ -934,10 +938,6 @@
       </div>
 
       <div class="charts-row">
-        <div class="chart-card chart-card-wide">
-          <div class="chart-title">Historico — Ultima Semana</div>
-          <div class="chart-wrapper"><canvas id="chartHistorico"></canvas></div>
-        </div>
         <div class="chart-card">
           <div class="chart-title">Por Classificacao</div>
           <div class="chart-wrapper"><canvas id="chartStatus"></canvas></div>
@@ -949,6 +949,12 @@
         <div class="chart-card">
           <div class="chart-title">Por Fonte</div>
           <div class="chart-wrapper"><canvas id="chartFonte"></canvas></div>
+        </div>
+      </div>
+      <div class="charts-row">
+        <div class="chart-card chart-card-full">
+          <div class="chart-title">Historico — Ultima Semana</div>
+          <div class="chart-wrapper"><canvas id="chartHistorico"></canvas></div>
         </div>
       </div>
 
