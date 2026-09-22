@@ -323,7 +323,7 @@
 
     .charts-row {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      grid-template-columns: repeat(3, 1fr);
       gap: 16px;
       margin-bottom: 24px;
     }
@@ -345,6 +345,27 @@
     .chart-wrapper {
       position: relative;
       height: 220px;
+    }
+
+    .chart-card-wide {
+      grid-column: span 2;
+    }
+
+    .news-summary {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin-top: 6px;
+      padding: 8px 10px;
+      background: var(--surface2);
+      border-radius: 6px;
+      border-left: 3px solid var(--accent);
+    }
+
+    .news-author {
+      font-size: 11px;
+      color: var(--accent);
+      font-weight: 600;
     }
 
     .section-header {
@@ -631,6 +652,7 @@
       .header { flex-wrap: wrap; gap: 12px; }
       .kpi-bar { grid-template-columns: repeat(2, 1fr); }
       .charts-row { grid-template-columns: 1fr; }
+      .chart-card-wide { grid-column: span 1; }
     }
 
     ::-webkit-scrollbar { width: 6px; }
@@ -912,6 +934,10 @@
       </div>
 
       <div class="charts-row">
+        <div class="chart-card chart-card-wide">
+          <div class="chart-title">Historico — Ultima Semana</div>
+          <div class="chart-wrapper"><canvas id="chartHistorico"></canvas></div>
+        </div>
         <div class="chart-card">
           <div class="chart-title">Por Classificacao</div>
           <div class="chart-wrapper"><canvas id="chartStatus"></canvas></div>
@@ -1157,9 +1183,10 @@ const IMPACTO_MPE_KEYWORDS = {
 };
 
 let allNews = [];
+let weeklyNews = [];
 let filteredNews = [];
 let activeFilters = { status: [], tema: [], impactoMPE: [], credibilidade: [], fonte: [] };
-let chartStatus, chartTema, chartFonte;
+let chartStatus, chartTema, chartFonte, chartHistorico;
 
 document.getElementById('dateInput').valueAsDate = new Date();
 
@@ -1257,13 +1284,14 @@ async function fetchRSS(query, date) {
     if (data.status !== 'ok' || !data.items) return [];
 
     return data.items
-      .filter(item => isRecentDay(item.pubDate, date, 1))
+      .filter(item => isRecentDay(item.pubDate, date, 7))
       .map(item => ({
         fullTitle: item.title || '',
         title: extractTitle(item.title || ''),
         source: extractSource(item.title || ''),
         link: item.link || '',
         pubDate: item.pubDate || '',
+        author: item.author || '',
         description: (item.description || '').replace(/<[^>]*>/g, '').substring(0, 300)
       }));
   } catch (e) {
@@ -1299,7 +1327,7 @@ async function fetchData() {
 
     showLoading('Classificando noticias...', `${allResults.length} noticias encontradas`);
 
-    allNews = allResults.map(item => {
+    const classifiedAll = allResults.map(item => {
       const classification = classifyNews(item.title);
       const cred = classifyCredibility(item.source, item.title);
       return {
@@ -1309,6 +1337,9 @@ async function fetchData() {
         date: date
       };
     });
+
+    weeklyNews = classifiedAll;
+    allNews = classifiedAll.filter(n => isRecentDay(n.pubDate, date, 1));
 
     // Sort: Fatos first, then Propostas, then Expectativas; within each, Alto impacto first
     const statusOrder = { 'Fato Confirmado': 0, 'Proposta/Discussao': 1, 'Expectativa/Projecao': 2 };
@@ -1531,9 +1562,11 @@ function renderNewsCard(news, idx, icon) {
           <div class="news-title"><a href="${news.link}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(news.title)}</a></div>
           <div class="news-meta">
             <span class="news-source">${escapeHtml(news.source)}</span>
+            ${news.author ? `<span class="news-author">&#9998; ${escapeHtml(news.author)}</span>` : ''}
             <span class="credibility-badge ${credClass}">${news.credIcon} ${news.credibilidade}</span>
             ${pubDate}
           </div>
+          ${news.description ? `<div class="news-summary">${escapeHtml(news.description)}</div>` : ''}
           <div class="news-tags">
             <span class="news-tag ${statusTagClass}">${news.status}</span>
             ${temasTags}
@@ -1612,6 +1645,51 @@ function updateCharts() {
 
   Chart.defaults.color = '#8b8fa8';
   Chart.defaults.font.family = "'Segoe UI', sans-serif";
+
+  // Historico semanal — line chart
+  const selectedDate = document.getElementById('dateInput').value;
+  if (selectedDate) {
+    const dayLabels = [];
+    const dayCounts = { total: [], fato: [], proposta: [], expectativa: [] };
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(selectedDate + 'T12:00:00');
+      d.setDate(d.getDate() - i);
+      const ds = d.toISOString().split('T')[0];
+      dayLabels.push(d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
+      const dayNews = weeklyNews.filter(n => {
+        if (!n.pubDate) return false;
+        const pd = new Date(n.pubDate);
+        return pd.getFullYear() === d.getFullYear() && pd.getMonth() === d.getMonth() && pd.getDate() === d.getDate();
+      });
+      dayCounts.total.push(dayNews.length);
+      dayCounts.fato.push(dayNews.filter(n => n.status === 'Fato Confirmado').length);
+      dayCounts.proposta.push(dayNews.filter(n => n.status === 'Proposta/Discussao').length);
+      dayCounts.expectativa.push(dayNews.filter(n => n.status === 'Expectativa/Projecao').length);
+    }
+
+    if (chartHistorico) chartHistorico.destroy();
+    chartHistorico = new Chart(document.getElementById('chartHistorico'), {
+      type: 'line',
+      data: {
+        labels: dayLabels,
+        datasets: [
+          { label: 'Total', data: dayCounts.total, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.3, pointRadius: 4, borderWidth: 2 },
+          { label: 'Fatos', data: dayCounts.fato, borderColor: '#22c55e', borderDash: [5,3], tension: 0.3, pointRadius: 3, borderWidth: 1.5 },
+          { label: 'Propostas', data: dayCounts.proposta, borderColor: '#f59e0b', borderDash: [5,3], tension: 0.3, pointRadius: 3, borderWidth: 1.5 },
+          { label: 'Expectativas', data: dayCounts.expectativa, borderColor: '#8b5cf6', borderDash: [5,3], tension: 0.3, pointRadius: 3, borderWidth: 1.5 }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'top', labels: { boxWidth: 12, padding: 10, font: { size: 11 } } } },
+        scales: {
+          x: { grid: { color: '#2e3348' }, ticks: { font: { size: 11 } } },
+          y: { beginAtZero: true, grid: { color: '#2e3348' }, ticks: { stepSize: 1, font: { size: 11 } } }
+        }
+      }
+    });
+  }
 
   if (chartStatus) chartStatus.destroy();
   chartStatus = new Chart(document.getElementById('chartStatus'), {
