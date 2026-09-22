@@ -1310,19 +1310,18 @@ async function fetchAuthor(url) {
   if (!url) return '';
   try {
     const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-    const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
+    const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
     if (!resp.ok) return '';
     const data = await resp.json();
     const html = data.contents || '';
 
-    let match = html.match(/<meta[^>]+name=["']author["'][^>]+content=["']([^"']+)["']/i);
-    if (!match) match = html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']author["']/i);
-    if (match && match[1].length < 80) return match[1].trim();
+    function clean(s) {
+      if (!s) return '';
+      return s.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').replace(/^por\s+/i, '').trim();
+    }
+    function valid(s) { return s && s.length > 1 && s.length < 100 && !s.startsWith('http'); }
 
-    match = html.match(/<meta[^>]+property=["']article:author["'][^>]+content=["']([^"']+)["']/i);
-    if (!match) match = html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']article:author["']/i);
-    if (match && match[1].length < 80 && !match[1].startsWith('http')) return match[1].trim();
-
+    // 1. JSON-LD (most structured/reliable)
     const ldBlocks = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
     if (ldBlocks) {
       for (const block of ldBlocks) {
@@ -1331,18 +1330,51 @@ async function fetchAuthor(url) {
           const ld = JSON.parse(jsonStr);
           const items = Array.isArray(ld) ? ld : ld['@graph'] ? ld['@graph'] : [ld];
           for (const item of items) {
+            if (!item.author) continue;
             const a = item.author;
-            if (!a) continue;
-            if (typeof a === 'string' && a.length < 80) return a;
-            if (Array.isArray(a)) { const names = a.map(x => x.name || x).filter(x => typeof x === 'string'); if (names.length) return names.join(', '); }
-            if (a.name) return a.name;
+            if (typeof a === 'string' && valid(a)) return clean(a);
+            if (Array.isArray(a)) { const names = a.map(x => x.name || x).filter(x => typeof x === 'string' && valid(x)); if (names.length) return names.map(n => clean(n)).join(', '); }
+            if (a.name && valid(a.name)) return clean(a.name);
           }
         } catch(e) {}
       }
     }
 
+    // 2. Meta tags
+    let match = html.match(/<meta[^>]+name=["']author["'][^>]+content=["']([^"']+)["']/i)
+             || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']author["']/i);
+    if (match && valid(match[1])) return clean(match[1]);
+
+    match = html.match(/<meta[^>]+property=["']article:author["'][^>]+content=["']([^"']+)["']/i)
+         || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']article:author["']/i);
+    if (match && valid(match[1]) && !match[1].startsWith('http')) return clean(match[1]);
+
     match = html.match(/<meta[^>]+name=["']byl["'][^>]+content=["']([^"']+)["']/i);
-    if (match) return match[1].replace(/^por\s+/i, '').trim();
+    if (match && valid(match[1])) return clean(match[1]);
+
+    // 3. HTML byline patterns (G1, Folha, Estadao, Valor, JOTA, etc.)
+    const bylinePatterns = [
+      /<[^>]+class=["'][^"']*(?:author|byline|writer|reporter|columnist|credits?-author|content-publication-data__from)[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/gi,
+      /<[^>]+itemprop=["']author["'][^>]*>([\s\S]*?)<\/[^>]+>/gi,
+      /<[^>]+rel=["']author["'][^>]*>([\s\S]*?)<\/[^>]+>/gi,
+      /(?:Por|By)\s+<[^>]*>([^<]+)<\/[^>]+>/gi,
+      /<p[^>]*class=["'][^"']*(?:author|byline)[^"']*["'][^>]*>([\s\S]*?)<\/p>/gi,
+      /<span[^>]*class=["'][^"']*(?:author|byline)[^"']*["'][^>]*>([\s\S]*?)<\/span>/gi,
+      /<address[^>]*class=["'][^"']*author[^"']*["'][^>]*>([\s\S]*?)<\/address>/gi,
+    ];
+
+    for (const pattern of bylinePatterns) {
+      const m = pattern.exec(html);
+      if (m) {
+        const candidate = clean(m[1]);
+        if (valid(candidate) && !/^\d+$/.test(candidate) && !/[<>{}]/.test(candidate)) return candidate;
+      }
+    }
+
+    // 4. Plain text "Por NomeSobrenome" near the top (first 5000 chars)
+    const top = html.substring(0, 5000);
+    match = top.match(/(?:^|\n)\s*Por\s+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+){0,4}(?:\s+[a-zà-ú]{1,3}\s+[A-ZÀ-Ú][a-zà-ú]+)*)/);
+    if (match && valid(match[1])) return match[1].trim();
 
     return '';
   } catch(e) {
@@ -1642,8 +1674,8 @@ function renderNewsCard(news, idx, icon) {
           <div class="news-title"><a href="${news.link}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(news.title)}</a></div>
           <div class="news-meta">
             <span class="news-source">${escapeHtml(news.source)}</span>
-            ${news.author ? `<span class="news-author">&#9998; ${escapeHtml(news.author)}</span>` : ''}
             <span class="credibility-badge ${credClass}">${news.credIcon} ${news.credibilidade}</span>
+            ${news.author ? `<span class="news-author">&#9998; ${escapeHtml(news.author)}</span>` : ''}
             ${pubDate}
           </div>
           ${news.description ? `<div class="news-summary">${escapeHtml(news.description)}</div>` : ''}
