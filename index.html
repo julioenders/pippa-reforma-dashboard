@@ -1306,6 +1306,65 @@ async function fetchRSS(query, date) {
   }
 }
 
+async function fetchAuthor(url) {
+  if (!url) return '';
+  try {
+    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
+    if (!resp.ok) return '';
+    const data = await resp.json();
+    const html = data.contents || '';
+
+    let match = html.match(/<meta[^>]+name=["']author["'][^>]+content=["']([^"']+)["']/i);
+    if (!match) match = html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']author["']/i);
+    if (match && match[1].length < 80) return match[1].trim();
+
+    match = html.match(/<meta[^>]+property=["']article:author["'][^>]+content=["']([^"']+)["']/i);
+    if (!match) match = html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']article:author["']/i);
+    if (match && match[1].length < 80 && !match[1].startsWith('http')) return match[1].trim();
+
+    const ldBlocks = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+    if (ldBlocks) {
+      for (const block of ldBlocks) {
+        const jsonStr = block.replace(/<script[^>]*>/i, '').replace(/<\/script>/i, '');
+        try {
+          const ld = JSON.parse(jsonStr);
+          const items = Array.isArray(ld) ? ld : ld['@graph'] ? ld['@graph'] : [ld];
+          for (const item of items) {
+            const a = item.author;
+            if (!a) continue;
+            if (typeof a === 'string' && a.length < 80) return a;
+            if (Array.isArray(a)) { const names = a.map(x => x.name || x).filter(x => typeof x === 'string'); if (names.length) return names.join(', '); }
+            if (a.name) return a.name;
+          }
+        } catch(e) {}
+      }
+    }
+
+    match = html.match(/<meta[^>]+name=["']byl["'][^>]+content=["']([^"']+)["']/i);
+    if (match) return match[1].replace(/^por\s+/i, '').trim();
+
+    return '';
+  } catch(e) {
+    return '';
+  }
+}
+
+async function fetchAuthorsForNews(newsArray) {
+  const BATCH_SIZE = 5;
+  for (let i = 0; i < newsArray.length; i += BATCH_SIZE) {
+    const batch = newsArray.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(
+      batch.map(n => fetchAuthor(n.link))
+    );
+    results.forEach((r, j) => {
+      if (r.status === 'fulfilled' && r.value) {
+        newsArray[i + j].author = r.value;
+      }
+    });
+  }
+}
+
 async function fetchData() {
   const date = document.getElementById('dateInput').value;
   if (!date) { alert('Selecione uma data.'); return; }
@@ -1363,6 +1422,21 @@ async function fetchData() {
     updateThermometer();
 
     hideLoading();
+
+    showLoading('Identificando autores das materias...', `0 de ${allNews.length}`);
+    const BATCH = 5;
+    for (let i = 0; i < allNews.length; i += BATCH) {
+      const batch = allNews.slice(i, i + BATCH);
+      const results = await Promise.allSettled(batch.map(n => fetchAuthor(n.link)));
+      results.forEach((r, j) => {
+        if (r.status === 'fulfilled' && r.value) {
+          allNews[i + j].author = r.value;
+        }
+      });
+      document.getElementById('loadingProgress').textContent = `${Math.min(i + BATCH, allNews.length)} de ${allNews.length}`;
+    }
+    hideLoading();
+    applyFilters();
 
   } catch (e) {
     console.error('Fetch error:', e);
