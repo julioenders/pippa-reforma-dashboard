@@ -355,17 +355,6 @@
       grid-column: 1 / -1;
     }
 
-    .news-summary {
-      font-size: 13px;
-      color: var(--text-muted);
-      line-height: 1.5;
-      margin-top: 6px;
-      padding: 8px 10px;
-      background: var(--surface2);
-      border-radius: 6px;
-      border-left: 3px solid var(--accent);
-    }
-
     .section-header {
       display: flex;
       align-items: center;
@@ -1294,88 +1283,16 @@ async function fetchRSS(query, date) {
 
     return data.items
       .filter(item => isRecentDay(item.pubDate, date, 7))
-      .map(item => {
-        const descHtml = item.description || '';
-        const urlMatch = descHtml.match(/<a[^>]+href=["'](https?:\/\/[^"']+)["']/i);
-        const articleUrl = urlMatch ? urlMatch[1] : '';
-        return {
-          fullTitle: item.title || '',
-          title: extractTitle(item.title || ''),
-          source: extractSource(item.title || ''),
-          link: item.link || '',
-          articleUrl: articleUrl,
-          pubDate: item.pubDate || '',
-          description: ''
-        };
-      });
+      .map(item => ({
+        fullTitle: item.title || '',
+        title: extractTitle(item.title || ''),
+        source: extractSource(item.title || ''),
+        link: item.link || '',
+        pubDate: item.pubDate || ''
+      }));
   } catch (e) {
     console.warn('RSS fetch failed for query:', query, e.message);
     return [];
-  }
-}
-
-async function fetchHtml(url) {
-  const resp = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(10000) });
-  if (!resp.ok) return '';
-  const data = await resp.json();
-  return data.contents || '';
-}
-
-function extractDescription(html) {
-  const decode = s => s.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#x27;/g, "'");
-  const m = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)
-        || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i)
-        || html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i)
-        || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i);
-  if (m && m[1] && m[1].length > 40) return decode(m[1]).substring(0, 400).trim();
-  return '';
-}
-
-function extractParagraphs(html) {
-  const body = (html.match(/<body[^>]*>([\s\S]*)<\/body>/i) || [null, html])[1];
-  const cleaned = body
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[\s\S]*?<\/style>/gi, '')
-    .replace(/<nav[\s\S]*?<\/nav>/gi, '')
-    .replace(/<header[\s\S]*?<\/header>/gi, '')
-    .replace(/<footer[\s\S]*?<\/footer>/gi, '')
-    .replace(/<aside[\s\S]*?<\/aside>/gi, '')
-    .replace(/<!--[\s\S]*?-->/g, '');
-  const paragraphs = cleaned.match(/<p[^>]*>([\s\S]*?)<\/p>/gi) || [];
-  const texts = paragraphs
-    .map(p => p.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim())
-    .filter(t => t.length > 40 && !/cookie|aceitar|politica de privacidade|inscreva-se|assine|leia mais|compartilh/i.test(t));
-  if (texts.length === 0) return '';
-  return texts.slice(0, 2).join(' ').substring(0, 400).trim();
-}
-
-async function fetchSummary(articleUrl, fallbackUrl) {
-  const url = articleUrl || fallbackUrl;
-  if (!url) return '';
-  try {
-    const html = await fetchHtml(url);
-    if (!html) return '';
-
-    const desc = extractDescription(html);
-    if (desc) return desc;
-
-    return extractParagraphs(html);
-  } catch(e) {
-    return '';
-  }
-}
-
-async function fetchSummariesBackground() {
-  const BATCH = 5;
-  for (let i = 0; i < allNews.length; i += BATCH) {
-    const batch = allNews.slice(i, i + BATCH);
-    const results = await Promise.allSettled(batch.map(n => fetchSummary(n.articleUrl, n.link)));
-    results.forEach((r, j) => {
-      if (r.status === 'fulfilled' && r.value) {
-        allNews[i + j].description = r.value;
-      }
-    });
-    applyFilters();
   }
 }
 
@@ -1433,8 +1350,6 @@ async function fetchData() {
     applyFilters();
 
     hideLoading();
-
-    fetchSummariesBackground();
 
   } catch (e) {
     console.error('Fetch error:', e);
@@ -1653,7 +1568,6 @@ function renderNewsCard(news, idx, icon) {
             <span class="credibility-badge ${credClass}">${news.credIcon} ${news.credibilidade}</span>
             ${pubDate}
           </div>
-          ${news.description ? `<div class="news-summary">${escapeHtml(news.description)}</div>` : ''}
           <div class="news-tags">
             <span class="news-tag ${statusTagClass}">${news.status}</span>
             ${temasTags}
