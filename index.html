@@ -1294,14 +1294,20 @@ async function fetchRSS(query, date) {
 
     return data.items
       .filter(item => isRecentDay(item.pubDate, date, 7))
-      .map(item => ({
-        fullTitle: item.title || '',
-        title: extractTitle(item.title || ''),
-        source: extractSource(item.title || ''),
-        link: item.link || '',
-        pubDate: item.pubDate || '',
-        description: (item.description || '').replace(/<[^>]*>/g, '').substring(0, 300)
-      }));
+      .map(item => {
+        const descHtml = item.description || '';
+        const urlMatch = descHtml.match(/<a[^>]+href=["'](https?:\/\/[^"']+)["']/i);
+        const articleUrl = urlMatch ? urlMatch[1] : '';
+        return {
+          fullTitle: item.title || '',
+          title: extractTitle(item.title || ''),
+          source: extractSource(item.title || ''),
+          link: item.link || '',
+          articleUrl: articleUrl,
+          pubDate: item.pubDate || '',
+          description: ''
+        };
+      });
   } catch (e) {
     console.warn('RSS fetch failed for query:', query, e.message);
     return [];
@@ -1343,24 +1349,12 @@ function extractParagraphs(html) {
   return texts.slice(0, 2).join(' ').substring(0, 400).trim();
 }
 
-async function fetchSummary(url) {
+async function fetchSummary(articleUrl, fallbackUrl) {
+  const url = articleUrl || fallbackUrl;
   if (!url) return '';
   try {
-    let html = await fetchHtml(url);
+    const html = await fetchHtml(url);
     if (!html) return '';
-
-    // Google News redirect — find real article URL
-    if (url.includes('news.google.com') || html.includes('news.google.com')) {
-      const realUrl = html.match(/<a[^>]+href=["'](https?:\/\/(?!news\.google\.com)[^"']+)["'][^>]*data-n/i)
-                   || html.match(/<meta[^>]+property=["']og:url["'][^>]+content=["'](https?:\/\/(?!news\.google\.com)[^"']+)["']/i)
-                   || html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["'](https?:\/\/(?!news\.google\.com)[^"']+)["']/i)
-                   || html.match(/window\.location\s*=\s*["'](https?:\/\/[^"']+)["']/i)
-                   || html.match(/<a[^>]+href=["'](https?:\/\/(?!news\.google\.com|accounts\.google)[^"']+)["']/i);
-      if (realUrl && realUrl[1]) {
-        const articleHtml = await fetchHtml(realUrl[1]);
-        if (articleHtml) html = articleHtml;
-      }
-    }
 
     const desc = extractDescription(html);
     if (desc) return desc;
@@ -1375,7 +1369,7 @@ async function fetchSummariesBackground() {
   const BATCH = 5;
   for (let i = 0; i < allNews.length; i += BATCH) {
     const batch = allNews.slice(i, i + BATCH);
-    const results = await Promise.allSettled(batch.map(n => fetchSummary(n.link)));
+    const results = await Promise.allSettled(batch.map(n => fetchSummary(n.articleUrl, n.link)));
     results.forEach((r, j) => {
       if (r.status === 'fulfilled' && r.value) {
         allNews[i + j].description = r.value;
